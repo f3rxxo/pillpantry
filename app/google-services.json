@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:227576612441:android:3b2f8f9f4aa6fd20969348",
+        "mobilesdk_app_id": "1:227576612441:android:9847abe0441f89dc969348",
         "android_client_info": {
-          "package_name": "com.fernando.pillpantry"
+          "package_name": "com.yourname.pillpantry"
         }
       },
       "oauth_client": [],
