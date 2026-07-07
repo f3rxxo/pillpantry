@@ -4,6 +4,17 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Firebase Firestore pulls in the FULL Guava library (via gRPC), which
+// already contains com.google.common.util.concurrent.ListenableFuture —
+// the same class CameraX needs. If the lightweight "listenablefuture" stub
+// artifact also ends up on the classpath (many libraries declare it as a
+// transitive dependency), you get two different jars defining the same
+// class, and Kotlin refuses to compile with a "conflicting dependencies"
+// error. Excluding the stub lets the one real Guava (from Firestore) win.
+configurations.all {
+    exclude(group = "com.google.guava", module = "listenablefuture")
+}
+
 android {
     namespace = "com.yourname.pillpantry"
     compileSdk = 34
@@ -73,11 +84,9 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
-    // CameraX's ProcessCameraProvider.getInstance() returns a ListenableFuture.
-    // That class is only pulled in transitively by CameraX, and recent Kotlin
-    // compiler versions require it to appear directly on the module's
-    // classpath or compilation fails with "Cannot access class ListenableFuture".
-    implementation("com.google.guava:listenablefuture:1.0")
+    // Real ListenableFuture (see the configurations.all exclude above, which
+    // stops the conflicting lightweight stub from also being present).
+    implementation("com.google.guava:guava:33.2.1-android")
 
     // ML Kit on-device barcode scanning
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
