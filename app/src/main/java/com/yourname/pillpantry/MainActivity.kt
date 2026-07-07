@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Kitchen
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,14 +31,14 @@ import com.yourname.pillpantry.data.OpenFoodFactsRepository
 import com.yourname.pillpantry.notifications.NotificationHelper
 import com.yourname.pillpantry.ui.pantry.PantryScreen
 import com.yourname.pillpantry.ui.scanner.ScannerScreen
-import com.yourname.pillpantry.ui.settings.SettingsScreen
+import com.yourname.pillpantry.ui.shoppinglist.ShoppingListScreen
 import com.yourname.pillpantry.ui.theme.PillPantryTheme
 import kotlinx.coroutines.launch
 
 private sealed class Tab(val route: String, val label: String) {
     data object Scanner : Tab("scanner", "Scanner")
     data object Pantry : Tab("pantry", "Pantry")
-    data object Settings : Tab("settings", "Settings")
+    data object ShoppingList : Tab("shopping_list", "Shopping List")
 }
 
 class MainActivity : ComponentActivity() {
@@ -99,7 +99,7 @@ private fun PillPantryApp(
     offRepository: OpenFoodFactsRepository
 ) {
     val navController = rememberNavController()
-    val tabs = listOf(Tab.Scanner, Tab.Pantry, Tab.Settings)
+    val tabs = listOf(Tab.Scanner, Tab.Pantry, Tab.ShoppingList)
 
     Scaffold(
         bottomBar = {
@@ -124,7 +124,7 @@ private fun PillPantryApp(
                             val icon = when (tab) {
                                 Tab.Scanner -> Icons.Default.CameraAlt
                                 Tab.Pantry -> Icons.Default.Kitchen
-                                Tab.Settings -> Icons.Default.Settings
+                                Tab.ShoppingList -> Icons.Default.ShoppingCart
                             }
                             Icon(icon, contentDescription = tab.label)
                         },
@@ -145,8 +145,8 @@ private fun PillPantryApp(
             composable(Tab.Pantry.route) {
                 PantryScreen(userId = userId, repository = repository)
             }
-            composable(Tab.Settings.route) {
-                SettingsScreen(userId = userId, repository = repository)
+            composable(Tab.ShoppingList.route) {
+                ShoppingListScreen(userId = userId, repository = repository)
             }
         }
     }

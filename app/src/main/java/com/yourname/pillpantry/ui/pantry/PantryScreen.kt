@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +19,9 @@ import com.yourname.pillpantry.data.Grocery
 import com.yourname.pillpantry.data.Vitamin
 import com.yourname.pillpantry.notifications.NotificationHelper
 import kotlinx.coroutines.launch
+
+/** Shared background color for grocery/vitamin/shopping-list rows across the app. */
+val ListItemColor = Color(0xFF6395EE)
 
 private enum class PantryTab { GROCERIES, VITAMINS }
 
@@ -57,9 +63,9 @@ fun PantryScreen(userId: String, repository: FirebaseRepository) {
                         items(groceries, key = { it.id }) { item ->
                             GroceryRow(
                                 item = item,
-                                onAdjust = { delta ->
+                                onToggleShoppingList = {
                                     scope.launch {
-                                        repository.setGroceryQuantity(userId, item.id, item.quantity + delta)
+                                        repository.setGroceryOnShoppingList(userId, item.id, !item.onShoppingList)
                                     }
                                 }
                             )
@@ -120,56 +126,57 @@ private fun EmptyState(text: String) {
 }
 
 @Composable
-private fun GroceryRow(item: Grocery, onAdjust: (Long) -> Unit) {
-    Surface(shape = RoundedCornerShape(10.dp), color = Color.White, modifier = Modifier.fillMaxWidth()) {
+private fun GroceryRow(item: Grocery, onToggleShoppingList: () -> Unit) {
+    Surface(shape = RoundedCornerShape(10.dp), color = ListItemColor, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(item.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            IconButtonSquare("-") { onAdjust(-1) }
-            Text(
-                "${item.quantity}",
-                modifier = Modifier.padding(horizontal = 12.dp),
-                style = MaterialTheme.typography.titleMedium
-            )
-            IconButtonSquare("+") { onAdjust(1) }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Qty: ${item.quantity}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+            }
+            IconButton(onClick = onToggleShoppingList) {
+                Icon(
+                    imageVector = if (item.onShoppingList) {
+                        Icons.Filled.ShoppingCart
+                    } else {
+                        Icons.Outlined.ShoppingCart
+                    },
+                    contentDescription = if (item.onShoppingList) {
+                        "Remove from shopping list"
+                    } else {
+                        "Add to shopping list"
+                    },
+                    tint = Color.White
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun VitaminRow(vitamin: Vitamin, onTakeDose: () -> Unit) {
-    Surface(shape = RoundedCornerShape(10.dp), color = Color.White, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(10.dp), color = ListItemColor, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(vitamin.name, style = MaterialTheme.typography.bodyLarge)
+                Text(vitamin.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
                 Text(
                     "${vitamin.currentPills} pills left" + if (vitamin.isLow) " · refill soon" else "",
-                    color = if (vitamin.isLow) Color(0xFFD32F2F) else Color.Gray,
+                    color = if (vitamin.isLow) Color(0xFFFFCDD2) else Color.White.copy(alpha = 0.85f),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
-            Button(onClick = onTakeDose, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00796B))) {
-                Text("Take Dose")
+            Button(onClick = onTakeDose, colors = ButtonDefaults.buttonColors(containerColor = Color.White)) {
+                Text("Take Dose", color = ListItemColor)
             }
-        }
-    }
-}
-
-@Composable
-private fun IconButtonSquare(label: String, onClick: () -> Unit) {
-    Surface(
-        color = Color(0xFF00796B),
-        shape = RoundedCornerShape(50),
-        modifier = Modifier.size(32.dp),
-        onClick = onClick
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Text(label, color = Color.White, style = MaterialTheme.typography.titleMedium)
         }
     }
 }

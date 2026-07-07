@@ -61,6 +61,8 @@ fun ScannerScreen(
     var suggestedBrand by remember { mutableStateOf<String?>(null) }
     var lookupLoading by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
+    var dosageInput by remember { mutableStateOf("1") }
+    var thresholdInput by remember { mutableStateOf("10") }
 
     fun resetScanState() {
         scanned = false
@@ -104,6 +106,8 @@ fun ScannerScreen(
                 pendingBarcode = barcode
                 itemName = ""
                 suggestedBrand = null
+                dosageInput = "1"
+                thresholdInput = "10"
                 showDialog = true
 
                 if (mode == ScanMode.GROCERY) {
@@ -128,6 +132,8 @@ fun ScannerScreen(
         itemName = ""
         suggestedBrand = null
         lookupLoading = false
+        dosageInput = "1"
+        thresholdInput = "10"
         resetScanState()
     }
 
@@ -135,17 +141,27 @@ fun ScannerScreen(
         val barcode = pendingBarcode ?: return
         val name = itemName.trim()
         if (name.isEmpty()) return
+
+        val dosage = dosageInput.toLongOrNull()
+        val threshold = thresholdInput.toLongOrNull()
+        if (mode == ScanMode.VITAMIN && (dosage == null || dosage <= 0 || threshold == null || threshold < 0)) {
+            message = "Enter a valid dose amount and refill threshold."
+            return
+        }
+
         scope.launch {
             try {
                 if (mode == ScanMode.GROCERY) {
                     repository.addGrocery(userId, name, barcode)
                 } else {
-                    repository.addVitamin(userId, name, barcode)
+                    repository.addVitamin(userId, name, barcode, dosage!!, threshold!!)
                 }
                 showDialog = false
                 pendingBarcode = null
                 itemName = ""
                 suggestedBrand = null
+                dosageInput = "1"
+                thresholdInput = "10"
                 showSuccess("Saved \"$name\"")
             } catch (e: Exception) {
                 message = "Error: ${e.message}"
@@ -256,6 +272,42 @@ fun ScannerScreen(
                         enabled = !lookupLoading,
                         singleLine = true
                     )
+
+                    if (mode == ScanMode.VITAMIN) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                             OutlinedTextField(
+                                value = pillsInput,
+                                onValueChange = { pillsInput = it },
+                                label = { Text("Pills per bottle") },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = dosageInput,
+                                onValueChange = { dosageInput = it },
+                                label = { Text("Pills per dose") },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = thresholdInput,
+                                onValueChange = { thresholdInput = it },
+                                label = { Text("Refill at") },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {

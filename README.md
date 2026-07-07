@@ -10,15 +10,19 @@ no device-code login flow involved at all.
 
 ## What's included
 
-- `MainActivity.kt` — bottom nav (Scanner / Pantry / Settings), anonymous
+- `MainActivity.kt` — bottom nav (Scanner / Pantry / Shopping List), anonymous
   sign-in, notification permission request
 - `ui/scanner/ScannerScreen.kt` + `BarcodeAnalyzer.kt` — CameraX preview,
   ML Kit on-device barcode detection, grocery/vitamin toggle, new-item
-  dialog with an Open Food Facts lookup that pre-fills the product name
-- `ui/pantry/PantryScreen.kt` — grocery +/- controls, vitamin "Take Dose"
-  button (fires a local notification when a vitamin drops to/below its
-  refill threshold)
-- `ui/settings/SettingsScreen.kt` — edit each vitamin's refill threshold
+  dialog with an Open Food Facts lookup that pre-fills the product name;
+  for vitamins, also collects **pills per dose** and **refill threshold**
+  at the moment you scan a new one
+- `ui/pantry/PantryScreen.kt` — groceries list (tap the cart icon to add/
+  remove an item from your shopping list) and vitamins list with a
+  "Take Dose" button (fires a local notification when a vitamin drops
+  to/below its refill threshold)
+- `ui/shoppinglist/ShoppingListScreen.kt` — groceries you've flagged from
+  the Pantry tab; check one off to clear it from the list
 - `data/FirebaseRepository.kt` — all Firestore reads/writes
 - `data/OpenFoodFactsApi.kt` — Retrofit client for barcode → product name
 - `notifications/NotificationHelper.kt` — local refill notifications
@@ -102,6 +106,7 @@ users/{userId}
       name: string
       barcode: string
       quantity: number
+      onShoppingList: boolean
   /vitamins/{vitaminId}
       name: string
       barcode: string

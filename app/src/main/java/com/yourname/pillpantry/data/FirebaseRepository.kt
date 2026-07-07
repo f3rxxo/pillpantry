@@ -80,12 +80,21 @@ class FirebaseRepository(
             .await()
     }
 
-    suspend fun setGroceryQuantity(userId: String, itemId: String, quantity: Long) {
-        if (quantity <= 0) {
-            groceriesRef(userId).document(itemId).delete().await()
-        } else {
-            groceriesRef(userId).document(itemId).update("quantity", quantity).await()
-        }
+    suspend fun setGroceryOnShoppingList(userId: String, itemId: String, onList: Boolean) {
+        groceriesRef(userId).document(itemId).update("onShoppingList", onList).await()
+    }
+
+    fun observeShoppingList(userId: String): Flow<List<Grocery>> = callbackFlow {
+        val registration = groceriesRef(userId)
+            .whereEqualTo("onShoppingList", true)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.toObjects(Grocery::class.java) ?: emptyList())
+            }
+        awaitClose { registration.remove() }
     }
 
     suspend fun addGrocery(userId: String, name: String, barcode: String) {
@@ -93,13 +102,20 @@ class FirebaseRepository(
         groceriesRef(userId).add(grocery).await()
     }
 
-    suspend fun addVitamin(userId: String, name: String, barcode: String) {
+    suspend fun addVitamin(
+        userId: String,
+        name: String,
+        barcode: String,
+        currentPills: Long, 
+        dailyDosage: Long,
+        refillThreshold: Long
+    ) {
         val vitamin = mapOf(
             "name" to name,
             "barcode" to barcode,
-            "currentPills" to 30L,
-            "dailyDosage" to 1L,
-            "refillThreshold" to 10L,
+            "currentPills" to currentPills,
+            "dailyDosage" to dailyDosage,
+            "refillThreshold" to refillThreshold,
             "lastTaken" to null
         )
         vitaminsRef(userId).add(vitamin).await()

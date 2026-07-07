@@ -8,7 +8,8 @@ data class Grocery(
     @DocumentId val id: String = "",
     val name: String = "",
     val barcode: String = "",
-    val quantity: Long = 0
+    val quantity: Long = 0,
+    val onShoppingList: Boolean = false
 )
 
 data class Vitamin(
