@@ -276,16 +276,6 @@ fun ScannerScreen(
                     if (mode == ScanMode.VITAMIN) {
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                             OutlinedTextField(
-                                value = pillsInput,
-                                onValueChange = { pillsInput = it },
-                                label = { Text("Pills per bottle") },
-                                singleLine = true,
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
                             OutlinedTextField(
                                 value = dosageInput,
                                 onValueChange = { dosageInput = it },
