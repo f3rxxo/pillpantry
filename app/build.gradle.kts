@@ -73,6 +73,12 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
+    // CameraX's ProcessCameraProvider.getInstance() returns a ListenableFuture.
+    // That class is only pulled in transitively by CameraX, and recent Kotlin
+    // compiler versions require it to appear directly on the module's
+    // classpath or compilation fails with "Cannot access class ListenableFuture".
+    implementation("com.google.guava:listenablefuture:1.0")
+
     // ML Kit on-device barcode scanning
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
