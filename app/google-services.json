@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "227576612441",
+    "project_id": "pillpantry-d62b7",
+    "storage_bucket": "pillpantry-d62b7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:227576612441:android:3b2f8f9f4aa6fd20969348",
+        "android_client_info": {
+          "package_name": "com.fernando.pillpantry"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlYEfKV2uDbGySC4zQFZDknSTn_Z1PD-M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

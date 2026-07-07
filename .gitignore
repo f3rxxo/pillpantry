@@ -1,0 +1,17 @@
+*.iml
+.gradle/
+.idea/
+build/
+app/build/
+local.properties
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# Firebase config downloaded per-developer from the Firebase console.
+# Commit it if this stays a private single-user repo; remove from here
+# and use a CI secret instead if the repo is ever made public.
+# app/google-services.json
