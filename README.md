@@ -17,12 +17,15 @@ no device-code login flow involved at all.
   dialog with an Open Food Facts lookup that pre-fills the product name;
   for vitamins, also collects **pills per dose** and **refill threshold**
   at the moment you scan a new one
-- `ui/pantry/PantryScreen.kt` — groceries list (tap the cart icon to add/
-  remove an item from your shopping list) and vitamins list with a
-  "Take Dose" button (fires a local notification when a vitamin drops
-  to/below its refill threshold). Swipe any row **right to restock**
-  manually (no scanning needed — prompts for units/pills to add) or
-  **left to delete** it (with a confirmation dialog).
+- `ui/pantry/PantryScreen.kt` — groceries list (blue rows, tap the cart icon
+  to add/remove an item from your shopping list) and vitamins list (orange
+  rows, `#FFA85D`) with a "Take Dose" button. Each row has an edit (pencil)
+  icon to change its settings after creation — refill threshold and
+  portions-per-unit for groceries, dose size and refill threshold for
+  vitamins. Swipe any row **right to restock** manually (no scanning
+  needed) or **left to delete** it (with a confirmation dialog). Tapping
+  "Take Dose" a second time on the same day prompts a confirmation instead
+  of silently double-logging.
 - `ui/shoppinglist/ShoppingListScreen.kt` — groceries you've flagged from
   the Pantry tab; check one off to clear it from the list
 - `data/FirebaseRepository.kt` — all Firestore reads/writes
@@ -123,7 +126,20 @@ users/{userId}
       onShoppingList: boolean
 ```
 
-## Automatic shopping list + daily portion decay
+## Dark mode & scan feedback
+
+- **Dark mode** follows the system setting automatically (`isSystemInDarkTheme()`
+  in `ui/theme/Theme.kt`) — no in-app toggle, matching standard Android
+  behavior. Grocery (blue) and vitamin (orange) row colors stay fixed in
+  both themes so the two lists stay visually distinct; surrounding chrome
+  (tab chips, empty states, dialog helper text) adapts via
+  `MaterialTheme.colorScheme`.
+- **Scan feedback**: a short (50ms) vibration fires the instant a barcode
+  is detected (`util/ScanFeedback.kt`), before the Firestore lookup even
+  starts — useful since you're often not looking closely at the screen
+  while scanning.
+
+
 
 - **Restocking**: re-scanning a grocery barcode you already track increments
   `quantity` by 1 and adds `portionsPerUnit` back to `portions` (e.g. buying

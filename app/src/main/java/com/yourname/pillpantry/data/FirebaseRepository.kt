@@ -245,8 +245,18 @@ class FirebaseRepository(
         return newCount
     }
 
-    suspend fun updateRefillThreshold(userId: String, vitaminId: String, threshold: Long) {
-        vitaminsRef(userId).document(vitaminId).update("refillThreshold", threshold).await()
+    /** Edit a vitamin's dose size and refill threshold after creation. */
+    suspend fun updateVitaminSettings(userId: String, vitaminId: String, dailyDosage: Long, refillThreshold: Long) {
+        vitaminsRef(userId).document(vitaminId)
+            .update(mapOf("dailyDosage" to dailyDosage, "refillThreshold" to refillThreshold))
+            .await()
+    }
+
+    /** Edit a grocery item's portions-per-unit and refill threshold after creation. */
+    suspend fun updateGrocerySettings(userId: String, itemId: String, portionsPerUnit: Long, portionsThreshold: Long) {
+        groceriesRef(userId).document(itemId)
+            .update(mapOf("portionsPerUnit" to portionsPerUnit, "portionsThreshold" to portionsThreshold))
+            .await()
     }
 
     /**

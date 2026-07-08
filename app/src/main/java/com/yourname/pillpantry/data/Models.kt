@@ -2,6 +2,9 @@ package com.yourname.pillpantry.data
 
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.ServerTimestamp
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
 
 data class Grocery(
@@ -29,4 +32,12 @@ data class Vitamin(
     val onShoppingList: Boolean = false
 ) {
     val isLow: Boolean get() = currentPills <= refillThreshold
+
+    /** True if [lastTaken] falls on today's date (device-local timezone). */
+    val takenToday: Boolean
+        get() {
+            val last = lastTaken ?: return false
+            val lastDate = Instant.ofEpochMilli(last.time).atZone(ZoneId.systemDefault()).toLocalDate()
+            return lastDate == LocalDate.now()
+        }
 }

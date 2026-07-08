@@ -25,6 +25,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.yourname.pillpantry.data.FirebaseRepository
 import com.yourname.pillpantry.data.OpenFoodFactsRepository
+import com.yourname.pillpantry.util.ScanFeedback
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
@@ -103,6 +104,7 @@ fun ScannerScreen(
     fun handleBarcode(barcode: String) {
         if (scanned) return
         scanned = true
+        ScanFeedback.vibrate(context)
         scope.launch {
             try {
                 if (mode == ScanMode.GROCERY) {
@@ -390,7 +392,7 @@ fun ScannerScreen(
                             "Portions count down automatically each day (e.g. eggs: qty 1 carton, " +
                                 "3 portions left). Quantity is how many units/packages you have on hand.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }

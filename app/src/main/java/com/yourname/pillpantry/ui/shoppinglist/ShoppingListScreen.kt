@@ -17,6 +17,7 @@ import com.yourname.pillpantry.data.Grocery
 import com.yourname.pillpantry.data.ShoppingListSnapshot
 import com.yourname.pillpantry.data.Vitamin
 import com.yourname.pillpantry.ui.pantry.ListItemColor
+import com.yourname.pillpantry.ui.pantry.VitaminItemColor
 import kotlinx.coroutines.launch
 
 /**
@@ -43,21 +44,31 @@ fun ShoppingListScreen(userId: String, repository: FirebaseRepository) {
                 "Nothing needed right now — items show up here automatically " +
                     "when portions or pills run low, or you can add a grocery " +
                     "item manually from the Pantry tab.",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 20.dp)
             )
         } else {
             LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
                 items(snapshot.groceries, key = { "grocery_${it.id}" }) { item ->
-                    GroceryListRow(item) {
-                        scope.launch { repository.setGroceryOnShoppingList(userId, item.id, false) }
-                    }
+                    ShoppingRow(
+                        title = item.name,
+                        subtitle = "${item.portions} portions left (threshold: ${item.portionsThreshold})",
+                        color = ListItemColor,
+                        onCheckOff = {
+                            scope.launch { repository.setGroceryOnShoppingList(userId, item.id, false) }
+                        }
+                    )
                     Spacer(Modifier.height(10.dp))
                 }
                 items(snapshot.vitamins, key = { "vitamin_${it.id}" }) { vitamin ->
-                    VitaminListRow(vitamin) {
-                        scope.launch { repository.setVitaminOnShoppingList(userId, vitamin.id, false) }
-                    }
+                    ShoppingRow(
+                        title = vitamin.name,
+                        subtitle = "${vitamin.currentPills} pills left (threshold: ${vitamin.refillThreshold})",
+                        color = VitaminItemColor,
+                        onCheckOff = {
+                            scope.launch { repository.setVitaminOnShoppingList(userId, vitamin.id, false) }
+                        }
+                    )
                     Spacer(Modifier.height(10.dp))
                 }
             }
@@ -66,26 +77,8 @@ fun ShoppingListScreen(userId: String, repository: FirebaseRepository) {
 }
 
 @Composable
-private fun GroceryListRow(item: Grocery, onCheckOff: () -> Unit) {
-    ShoppingRow(
-        title = item.name,
-        subtitle = "${item.portions} portions left (threshold: ${item.portionsThreshold})",
-        onCheckOff = onCheckOff
-    )
-}
-
-@Composable
-private fun VitaminListRow(vitamin: Vitamin, onCheckOff: () -> Unit) {
-    ShoppingRow(
-        title = vitamin.name,
-        subtitle = "${vitamin.currentPills} pills left (threshold: ${vitamin.refillThreshold})",
-        onCheckOff = onCheckOff
-    )
-}
-
-@Composable
-private fun ShoppingRow(title: String, subtitle: String, onCheckOff: () -> Unit) {
-    Surface(shape = RoundedCornerShape(10.dp), color = ListItemColor, modifier = Modifier.fillMaxWidth()) {
+private fun ShoppingRow(title: String, subtitle: String, color: Color, onCheckOff: () -> Unit) {
+    Surface(shape = RoundedCornerShape(10.dp), color = color, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
