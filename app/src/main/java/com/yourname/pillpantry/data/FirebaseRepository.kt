@@ -107,8 +107,8 @@ class FirebaseRepository(
         name: String,
         barcode: String,
         dailyDosage: Long,
-        refillThreshold: Long
-        pillsPerBottle: Long
+        refillThreshold: Long,
+        pillsPerBottle: Long,
     ) {
         val vitamin = mapOf(
             "name" to name,
