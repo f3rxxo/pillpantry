@@ -63,6 +63,7 @@ fun ScannerScreen(
     var showDialog by remember { mutableStateOf(false) }
     var dosageInput by remember { mutableStateOf("1") }
     var thresholdInput by remember { mutableStateOf("10") }
+    var pillsPerBottleInput by remember { mutableStateOf("30") }
 
     fun resetScanState() {
         scanned = false
@@ -106,6 +107,7 @@ fun ScannerScreen(
                 pendingBarcode = barcode
                 itemName = ""
                 suggestedBrand = null
+                pillsPerBottleInput = "30"
                 dosageInput = "1"
                 thresholdInput = "10"
                 showDialog = true
@@ -132,6 +134,7 @@ fun ScannerScreen(
         itemName = ""
         suggestedBrand = null
         lookupLoading = false
+        pillsPerBottleInput = "30"
         dosageInput = "1"
         thresholdInput = "10"
         resetScanState()
@@ -144,17 +147,18 @@ fun ScannerScreen(
 
         val dosage = dosageInput.toLongOrNull()
         val threshold = thresholdInput.toLongOrNull()
-        if (mode == ScanMode.VITAMIN && (dosage == null || dosage <= 0 || threshold == null || threshold < 0)) {
-            message = "Enter a valid dose amount and refill threshold."
+        val pillsPerBottle = pillsPerBottleInput.toLongOrNull()
+        if (mode == ScanMode.VITAMIN && (dosage == null || dosage <= 0 || threshold == null || threshold < 0 || pillsPerBottle == null || pillsPerBottle <= 0)) {
+            message = "Enter a valid dose amount, refill threshold, and pills per bottle."
             return
         }
-
+        
         scope.launch {
             try {
                 if (mode == ScanMode.GROCERY) {
                     repository.addGrocery(userId, name, barcode)
                 } else {
-                    repository.addVitamin(userId, name, barcode, dosage!!, threshold!!)
+                    repository.addVitamin(userId, name, barcode, dosage!!, threshold!!, pillsPerBottle!!)
                 }
                 showDialog = false
                 pendingBarcode = null
@@ -277,6 +281,16 @@ fun ScannerScreen(
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
+                               value = pillsPerBottleInput,
+                               onValueChange = { pillsPerBottleInput = it },
+                               label = { Text("Pills per bottle") },
+                               singleLine = true,
+                               keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                               keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                modifier = Modifier.weight(1f)
+                           )
+                           OutlinedTextField(
                                 value = dosageInput,
                                 onValueChange = { dosageInput = it },
                                 label = { Text("Pills per dose") },
