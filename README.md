@@ -20,7 +20,9 @@ no device-code login flow involved at all.
 - `ui/pantry/PantryScreen.kt` — groceries list (tap the cart icon to add/
   remove an item from your shopping list) and vitamins list with a
   "Take Dose" button (fires a local notification when a vitamin drops
-  to/below its refill threshold)
+  to/below its refill threshold). Swipe any row **right to restock**
+  manually (no scanning needed — prompts for units/pills to add) or
+  **left to delete** it (with a confirmation dialog).
 - `ui/shoppinglist/ShoppingListScreen.kt` — groceries you've flagged from
   the Pantry tab; check one off to clear it from the list
 - `data/FirebaseRepository.kt` — all Firestore reads/writes

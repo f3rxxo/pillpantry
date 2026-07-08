@@ -166,17 +166,19 @@ class FirebaseRepository(
     }
 
     /**
-     * Re-scanning a grocery barcode you already track means you bought
-     * another unit — bumps quantity by 1 and restocks portions by the
-     * item's [Grocery.portionsPerUnit], clearing the shopping-list flag if
-     * that brings it back above the threshold.
+     * Restocks a grocery item by [units] (default 1 — used both when
+     * re-scanning a barcode and when manually restocking via a swipe
+     * action). Bumps quantity by [units] and portions by
+     * `portionsPerUnit * units`, clearing the shopping-list flag if that
+     * brings it back above the threshold.
      */
-    suspend fun restockGrocery(userId: String, item: Grocery): Long {
-        val newPortions = item.portions + item.portionsPerUnit
+    suspend fun restockGrocery(userId: String, item: Grocery, units: Long = 1): Long {
+        val newQuantity = item.quantity + units
+        val newPortions = item.portions + (item.portionsPerUnit * units)
         groceriesRef(userId).document(item.id)
             .update(
                 mapOf(
-                    "quantity" to FieldValue.increment(1),
+                    "quantity" to newQuantity,
                     "portions" to newPortions,
                     "lastPortionUpdate" to FieldValue.serverTimestamp(),
                     "onShoppingList" to (newPortions <= item.portionsThreshold)
@@ -184,6 +186,28 @@ class FirebaseRepository(
             )
             .await()
         return newPortions
+    }
+
+    suspend fun deleteGrocery(userId: String, itemId: String) {
+        groceriesRef(userId).document(itemId).delete().await()
+    }
+
+    suspend fun deleteVitamin(userId: String, itemId: String) {
+        vitaminsRef(userId).document(itemId).delete().await()
+    }
+
+    /** Manually adds [pillsToAdd] pills without going through "Take Dose". */
+    suspend fun restockVitamin(userId: String, item: Vitamin, pillsToAdd: Long): Long {
+        val newCount = item.currentPills + pillsToAdd
+        vitaminsRef(userId).document(item.id)
+            .update(
+                mapOf(
+                    "currentPills" to newCount,
+                    "onShoppingList" to (newCount <= item.refillThreshold)
+                )
+            )
+            .await()
+        return newCount
     }
 
     suspend fun addVitamin(
