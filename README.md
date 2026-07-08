@@ -105,16 +105,47 @@ users/{userId}
   /groceries/{itemId}
       name: string
       barcode: string
-      quantity: number
+      quantity: number              — units/packages on hand
+      portions: number              — individual portions remaining
+      portionsPerUnit: number       — portions one unit restocks (auto-computed at creation)
+      portionsThreshold: number     — auto-adds to shopping list at/below this
+      lastPortionUpdate: timestamp
       onShoppingList: boolean
   /vitamins/{vitaminId}
       name: string
       barcode: string
       currentPills: number
       dailyDosage: number
-      refillThreshold: number
+      refillThreshold: number       — auto-adds to shopping list at/below this
       lastTaken: timestamp | null
+      onShoppingList: boolean
 ```
+
+## Automatic shopping list + daily portion decay
+
+- **Restocking**: re-scanning a grocery barcode you already track increments
+  `quantity` by 1 and adds `portionsPerUnit` back to `portions` (e.g. buying
+  a second carton of eggs with `portionsPerUnit = 3` takes portions from 0
+  back up to 3), automatically clearing the shopping-list flag if that
+  brings it back above the threshold. `portionsPerUnit` is computed once at
+  creation time as `portions / quantity` and stored on the item, so it isn't
+  editable later without directly changing the Firestore document.
+- **Auto-add to shopping list**: both groceries (`portions <= portionsThreshold`)
+  and vitamins (`currentPills <= refillThreshold`) flip `onShoppingList = true`
+  automatically — groceries when the daily decay pushes them under the
+  threshold, vitamins when you tap "Take Dose". You can still add/remove a
+  grocery manually via the cart icon in Pantry at any time.
+- **Daily portion decay**: rather than relying on a background job firing at
+  an exact time (Android won't reliably do that for a personal app — Doze
+  mode and battery optimization can delay `WorkManager` jobs by hours),
+  `FirebaseRepository.applyMissedPortionDecrements()` runs on every app
+  launch and decrements each grocery's `portions` by 1 for every 7am
+  America/Chicago boundary that's passed since its `lastPortionUpdate`. This
+  means it's always correct whenever you open the app, even after several
+  days away. A `PortionDecayWorker` (`WorkManager`, `work/` package) also
+  runs this in the background once a day as a best-effort supplement, so
+  counts can stay roughly current even if you don't open the app — but the
+  launch-time catch-up is what actually guarantees accuracy.
 
 ## Notes on this version vs. the React Native one
 

@@ -1,12 +1,22 @@
 package com.yourname.pillpantry.data
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
+
+/** The "portions used per day" cutoff. Central US time, matching the user's household. */
+private val PORTION_TIMEZONE: ZoneId = ZoneId.of("America/Chicago")
+private const val PORTION_CUTOVER_HOUR = 7
 
 /**
  * Single-user Firestore access layer.
@@ -76,7 +86,7 @@ class FirebaseRepository(
 
     suspend fun incrementGroceryQuantity(userId: String, itemId: String, delta: Long) {
         groceriesRef(userId).document(itemId)
-            .update("quantity", com.google.firebase.firestore.FieldValue.increment(delta))
+            .update("quantity", FieldValue.increment(delta))
             .await()
     }
 
@@ -84,22 +94,96 @@ class FirebaseRepository(
         groceriesRef(userId).document(itemId).update("onShoppingList", onList).await()
     }
 
-    fun observeShoppingList(userId: String): Flow<List<Grocery>> = callbackFlow {
-        val registration = groceriesRef(userId)
+    suspend fun setVitaminOnShoppingList(userId: String, itemId: String, onList: Boolean) {
+        vitaminsRef(userId).document(itemId).update("onShoppingList", onList).await()
+    }
+
+    /** Groceries AND vitamins currently flagged onShoppingList = true, merged into one flow. */
+    fun observeShoppingList(userId: String): Flow<ShoppingListSnapshot> = callbackFlow {
+        var latestGroceries = emptyList<Grocery>()
+        var latestVitamins = emptyList<Vitamin>()
+
+        fun emit() = trySend(ShoppingListSnapshot(latestGroceries, latestVitamins))
+
+        val groceryReg = groceriesRef(userId)
             .whereEqualTo("onShoppingList", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
                     return@addSnapshotListener
                 }
-                trySend(snapshot?.toObjects(Grocery::class.java) ?: emptyList())
+                latestGroceries = snapshot?.toObjects(Grocery::class.java) ?: emptyList()
+                emit()
             }
-        awaitClose { registration.remove() }
+
+        val vitaminReg = vitaminsRef(userId)
+            .whereEqualTo("onShoppingList", true)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                latestVitamins = snapshot?.toObjects(Vitamin::class.java) ?: emptyList()
+                emit()
+            }
+
+        awaitClose {
+            groceryReg.remove()
+            vitaminReg.remove()
+        }
     }
 
-    suspend fun addGrocery(userId: String, name: String, barcode: String) {
-        val grocery = mapOf("name" to name, "barcode" to barcode, "quantity" to 1L)
+    /**
+     * @param quantity number of units/packages on hand (e.g. 1 carton of eggs)
+     * @param portions remaining individual portions (e.g. 3 eggs left)
+     * @param portionsThreshold once [portions] drops to/below this, the item
+     *   is auto-added to the shopping list
+     */
+    suspend fun addGrocery(
+        userId: String,
+        name: String,
+        barcode: String,
+        quantity: Long,
+        portions: Long,
+        portionsThreshold: Long
+    ) {
+        // How many portions one unit represents, e.g. 1 carton = 3 portions.
+        // Used later to restock portions correctly when this barcode is
+        // scanned again (see restockGrocery).
+        val portionsPerUnit = if (quantity > 0) (portions / quantity).coerceAtLeast(1) else portions.coerceAtLeast(1)
+
+        val grocery = mapOf(
+            "name" to name,
+            "barcode" to barcode,
+            "quantity" to quantity,
+            "portions" to portions,
+            "portionsPerUnit" to portionsPerUnit,
+            "portionsThreshold" to portionsThreshold,
+            "lastPortionUpdate" to FieldValue.serverTimestamp(),
+            "onShoppingList" to (portions <= portionsThreshold)
+        )
         groceriesRef(userId).add(grocery).await()
+    }
+
+    /**
+     * Re-scanning a grocery barcode you already track means you bought
+     * another unit — bumps quantity by 1 and restocks portions by the
+     * item's [Grocery.portionsPerUnit], clearing the shopping-list flag if
+     * that brings it back above the threshold.
+     */
+    suspend fun restockGrocery(userId: String, item: Grocery): Long {
+        val newPortions = item.portions + item.portionsPerUnit
+        groceriesRef(userId).document(item.id)
+            .update(
+                mapOf(
+                    "quantity" to FieldValue.increment(1),
+                    "portions" to newPortions,
+                    "lastPortionUpdate" to FieldValue.serverTimestamp(),
+                    "onShoppingList" to (newPortions <= item.portionsThreshold)
+                )
+            )
+            .await()
+        return newPortions
     }
 
     suspend fun addVitamin(
@@ -108,7 +192,7 @@ class FirebaseRepository(
         barcode: String,
         dailyDosage: Long,
         refillThreshold: Long,
-        pillsPerBottle: Long,
+        pillsPerBottle: Long
     ) {
         val vitamin = mapOf(
             "name" to name,
@@ -116,19 +200,21 @@ class FirebaseRepository(
             "currentPills" to pillsPerBottle,
             "dailyDosage" to dailyDosage,
             "refillThreshold" to refillThreshold,
-            "lastTaken" to null
+            "lastTaken" to null,
+            "onShoppingList" to (pillsPerBottle <= refillThreshold)
         )
         vitaminsRef(userId).add(vitamin).await()
     }
 
-    /** Returns the new pill count after taking a dose. */
+    /** Returns the new pill count after taking a dose. Auto-flags the shopping list when low. */
     suspend fun takeDose(userId: String, vitamin: Vitamin): Long {
         val newCount = (vitamin.currentPills - vitamin.dailyDosage).coerceAtLeast(0)
         vitaminsRef(userId).document(vitamin.id)
             .update(
                 mapOf(
                     "currentPills" to newCount,
-                    "lastTaken" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    "lastTaken" to FieldValue.serverTimestamp(),
+                    "onShoppingList" to (newCount <= vitamin.refillThreshold)
                 )
             )
             .await()
@@ -138,4 +224,64 @@ class FirebaseRepository(
     suspend fun updateRefillThreshold(userId: String, vitaminId: String, threshold: Long) {
         vitaminsRef(userId).document(vitaminId).update("refillThreshold", threshold).await()
     }
+
+    /**
+     * Catch-up logic for the daily portion decrement. Rather than relying on
+     * a background job firing at exactly 7am (Android won't reliably do
+     * that for a personal app — see README), this looks at how many 7am
+     * Central-time boundaries have passed since each grocery item's
+     * [Grocery.lastPortionUpdate] and decrements portions by 1 per boundary
+     * crossed. Call this on app launch (and optionally from a best-effort
+     * WorkManager job) so the count is always correct whenever the user
+     * actually opens the app, even after several days away.
+     */
+    suspend fun applyMissedPortionDecrements(userId: String, now: Instant = Instant.now()) {
+        val snapshot = groceriesRef(userId).get().await()
+        val groceries = snapshot.toObjects(Grocery::class.java)
+        val batch = db.batch()
+        var hasUpdates = false
+
+        for (item in groceries) {
+            val last = item.lastPortionUpdate ?: continue
+            if (item.portions <= 0) continue
+
+            val elapsedDays = elapsed7amBoundaries(last.toInstant(), now)
+            if (elapsedDays <= 0) continue
+
+            val newPortions = (item.portions - elapsedDays).coerceAtLeast(0)
+            val docRef = groceriesRef(userId).document(item.id)
+            batch.update(
+                docRef,
+                mapOf(
+                    "portions" to newPortions,
+                    "lastPortionUpdate" to FieldValue.serverTimestamp(),
+                    "onShoppingList" to (item.onShoppingList || newPortions <= item.portionsThreshold)
+                )
+            )
+            hasUpdates = true
+        }
+
+        if (hasUpdates) batch.commit().await()
+    }
+
+    /** Number of 7am Central-time boundaries crossed between [from] and [to]. */
+    private fun elapsed7amBoundaries(from: Instant, to: Instant): Long {
+        fun effectiveDay(instant: Instant): LocalDate {
+            val zoned: ZonedDateTime = instant.atZone(PORTION_TIMEZONE)
+            return if (zoned.hour < PORTION_CUTOVER_HOUR) {
+                zoned.toLocalDate().minusDays(1)
+            } else {
+                zoned.toLocalDate()
+            }
+        }
+        val days = ChronoUnit.DAYS.between(effectiveDay(from), effectiveDay(to))
+        return days.coerceAtLeast(0)
+    }
+}
+
+data class ShoppingListSnapshot(
+    val groceries: List<Grocery> = emptyList(),
+    val vitamins: List<Vitamin> = emptyList()
+) {
+    val isEmpty: Boolean get() = groceries.isEmpty() && vitamins.isEmpty()
 }

@@ -14,20 +14,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.yourname.pillpantry.data.FirebaseRepository
 import com.yourname.pillpantry.data.Grocery
+import com.yourname.pillpantry.data.ShoppingListSnapshot
+import com.yourname.pillpantry.data.Vitamin
 import com.yourname.pillpantry.ui.pantry.ListItemColor
 import kotlinx.coroutines.launch
 
 /**
- * Shows groceries the user has flagged (from the Pantry tab) as needing a
- * restock. Checking an item off here just clears the flag — it stays in
- * the Pantry's Groceries list either way, since the flag doesn't affect
- * quantity tracking.
+ * Shows everything currently flagged onShoppingList = true — groceries
+ * (flagged manually from Pantry, or automatically once portions drop to
+ * the threshold) and vitamins (flagged automatically once pills drop to
+ * the refill threshold). Checking an item off just clears the flag; it
+ * stays in its Pantry list either way.
  */
 @Composable
 fun ShoppingListScreen(userId: String, repository: FirebaseRepository) {
     val scope = rememberCoroutineScope()
 
-    val items by produceState(initialValue = emptyList<Grocery>(), userId) {
+    val snapshot by produceState(initialValue = ShoppingListSnapshot(), userId) {
         repository.observeShoppingList(userId).collect { value = it }
     }
 
@@ -35,45 +38,64 @@ fun ShoppingListScreen(userId: String, repository: FirebaseRepository) {
         Text("Shopping List", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
 
-        if (items.isEmpty()) {
+        if (snapshot.isEmpty) {
             Text(
-                "Nothing on your list. Add items from the Pantry tab.",
+                "Nothing needed right now — items show up here automatically " +
+                    "when portions or pills run low, or you can add a grocery " +
+                    "item manually from the Pantry tab.",
                 color = Color.Gray,
                 modifier = Modifier.padding(top = 20.dp)
             )
         } else {
             LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
-                items(items, key = { it.id }) { item ->
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = ListItemColor,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(item.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                                Text(
-                                    "Qty on hand: ${item.quantity}",
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        repository.setGroceryOnShoppingList(userId, item.id, false)
-                                    }
-                                }
-                            ) {
-                                Icon(Icons.Filled.Check, contentDescription = "Got it — remove from list", tint = Color.White)
-                            }
-                        }
+                items(snapshot.groceries, key = { "grocery_${it.id}" }) { item ->
+                    GroceryListRow(item) {
+                        scope.launch { repository.setGroceryOnShoppingList(userId, item.id, false) }
                     }
                     Spacer(Modifier.height(10.dp))
                 }
+                items(snapshot.vitamins, key = { "vitamin_${it.id}" }) { vitamin ->
+                    VitaminListRow(vitamin) {
+                        scope.launch { repository.setVitaminOnShoppingList(userId, vitamin.id, false) }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroceryListRow(item: Grocery, onCheckOff: () -> Unit) {
+    ShoppingRow(
+        title = item.name,
+        subtitle = "${item.portions} portions left (threshold: ${item.portionsThreshold})",
+        onCheckOff = onCheckOff
+    )
+}
+
+@Composable
+private fun VitaminListRow(vitamin: Vitamin, onCheckOff: () -> Unit) {
+    ShoppingRow(
+        title = vitamin.name,
+        subtitle = "${vitamin.currentPills} pills left (threshold: ${vitamin.refillThreshold})",
+        onCheckOff = onCheckOff
+    )
+}
+
+@Composable
+private fun ShoppingRow(title: String, subtitle: String, onCheckOff: () -> Unit) {
+    Surface(shape = RoundedCornerShape(10.dp), color = ListItemColor, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(14.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                Text(subtitle, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.bodySmall)
+            }
+            IconButton(onClick = onCheckOff) {
+                Icon(Icons.Filled.Check, contentDescription = "Got it — remove from list", tint = Color.White)
             }
         }
     }

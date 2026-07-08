@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationHelper.createChannel(this)
+        com.yourname.pillpantry.work.PortionDecayWorker.schedule(this)
 
         setContent {
             PillPantryTheme {
@@ -67,7 +68,13 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     scope.launch {
-                        userId = repository.ensureSignedIn()
+                        val uid = repository.ensureSignedIn()
+                        // Catch up any missed daily portion decrements (see
+                        // FirebaseRepository.applyMissedPortionDecrements for
+                        // why this runs here instead of relying solely on a
+                        // background job to fire at exactly 7am).
+                        repository.applyMissedPortionDecrements(uid)
+                        userId = uid
                     }
                 }
 

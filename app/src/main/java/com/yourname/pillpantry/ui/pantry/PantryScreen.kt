@@ -135,9 +135,10 @@ private fun GroceryRow(item: Grocery, onToggleShoppingList: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(item.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Qty: ${item.quantity}",
+                    "Qty: ${item.quantity} · ${item.portions} portions left" +
+                        if (item.isLowOnPortions) " · refill soon" else "",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.85f)
+                    color = if (item.isLowOnPortions) Color(0xFFFFCDD2) else Color.White.copy(alpha = 0.85f)
                 )
             }
             IconButton(onClick = onToggleShoppingList) {

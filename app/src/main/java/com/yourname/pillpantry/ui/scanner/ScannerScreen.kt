@@ -10,7 +10,9 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -61,9 +63,29 @@ fun ScannerScreen(
     var suggestedBrand by remember { mutableStateOf<String?>(null) }
     var lookupLoading by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
+
+    // Vitamin fields
     var dosageInput by remember { mutableStateOf("1") }
     var thresholdInput by remember { mutableStateOf("10") }
     var pillsPerBottleInput by remember { mutableStateOf("30") }
+
+    // Grocery fields
+    var quantityInput by remember { mutableStateOf("1") }
+    var portionsInput by remember { mutableStateOf("1") }
+    var portionsThresholdInput by remember { mutableStateOf("0") }
+
+    fun resetDialogFields() {
+        pendingBarcode = null
+        itemName = ""
+        suggestedBrand = null
+        lookupLoading = false
+        dosageInput = "1"
+        thresholdInput = "10"
+        pillsPerBottleInput = "30"
+        quantityInput = "1"
+        portionsInput = "1"
+        portionsThresholdInput = "0"
+    }
 
     fun resetScanState() {
         scanned = false
@@ -86,8 +108,11 @@ fun ScannerScreen(
                 if (mode == ScanMode.GROCERY) {
                     val existing = repository.findGroceryByBarcode(userId, barcode)
                     if (existing != null) {
-                        repository.incrementGroceryQuantity(userId, existing.id, 1)
-                        showSuccess("Added 1 to \"${existing.name}\"")
+                        val newPortions = repository.restockGrocery(userId, existing)
+                        showSuccess(
+                            "Added 1 to \"${existing.name}\" " +
+                                "(+${existing.portionsPerUnit} portions, now $newPortions)"
+                        )
                         return@launch
                     }
                 } else {
@@ -104,12 +129,8 @@ fun ScannerScreen(
 
                 // New item — open the naming dialog, and for groceries try an
                 // Open Food Facts lookup to pre-fill the name.
+                resetDialogFields()
                 pendingBarcode = barcode
-                itemName = ""
-                suggestedBrand = null
-                pillsPerBottleInput = "30"
-                dosageInput = "1"
-                thresholdInput = "10"
                 showDialog = true
 
                 if (mode == ScanMode.GROCERY) {
@@ -130,13 +151,7 @@ fun ScannerScreen(
 
     fun cancelDialog() {
         showDialog = false
-        pendingBarcode = null
-        itemName = ""
-        suggestedBrand = null
-        lookupLoading = false
-        pillsPerBottleInput = "30"
-        dosageInput = "1"
-        thresholdInput = "10"
+        resetDialogFields()
         resetScanState()
     }
 
@@ -145,31 +160,49 @@ fun ScannerScreen(
         val name = itemName.trim()
         if (name.isEmpty()) return
 
-        val dosage = dosageInput.toLongOrNull()
-        val threshold = thresholdInput.toLongOrNull()
-        val pillsPerBottle = pillsPerBottleInput.toLongOrNull()
-        if (mode == ScanMode.VITAMIN && (dosage == null || dosage <= 0 || threshold == null || threshold < 0 || pillsPerBottle == null || pillsPerBottle <= 0)) {
-            message = "Enter a valid dose amount, refill threshold, and pills per bottle."
-            return
-        }
-        
-        scope.launch {
-            try {
-                if (mode == ScanMode.GROCERY) {
-                    repository.addGrocery(userId, name, barcode)
-                } else {
-                    repository.addVitamin(userId, name, barcode, dosage!!, threshold!!, pillsPerBottle!!)
+        if (mode == ScanMode.VITAMIN) {
+            val dosage = dosageInput.toLongOrNull()
+            val threshold = thresholdInput.toLongOrNull()
+            val pillsPerBottle = pillsPerBottleInput.toLongOrNull()
+            if (dosage == null || dosage <= 0 ||
+                threshold == null || threshold < 0 ||
+                pillsPerBottle == null || pillsPerBottle <= 0
+            ) {
+                message = "Enter a valid dose amount, refill threshold, and pills per bottle."
+                return
+            }
+            scope.launch {
+                try {
+                    repository.addVitamin(userId, name, barcode, dosage, threshold, pillsPerBottle)
+                    showDialog = false
+                    resetDialogFields()
+                    showSuccess("Saved \"$name\"")
+                } catch (e: Exception) {
+                    message = "Error: ${e.message}"
+                    resetScanState()
                 }
-                showDialog = false
-                pendingBarcode = null
-                itemName = ""
-                suggestedBrand = null
-                dosageInput = "1"
-                thresholdInput = "10"
-                showSuccess("Saved \"$name\"")
-            } catch (e: Exception) {
-                message = "Error: ${e.message}"
-                resetScanState()
+            }
+        } else {
+            val quantity = quantityInput.toLongOrNull()
+            val portions = portionsInput.toLongOrNull()
+            val portionsThreshold = portionsThresholdInput.toLongOrNull()
+            if (quantity == null || quantity <= 0 ||
+                portions == null || portions < 0 ||
+                portionsThreshold == null || portionsThreshold < 0
+            ) {
+                message = "Enter a valid quantity, portions, and portions threshold."
+                return
+            }
+            scope.launch {
+                try {
+                    repository.addGrocery(userId, name, barcode, quantity, portions, portionsThreshold)
+                    showDialog = false
+                    resetDialogFields()
+                    showSuccess("Saved \"$name\"")
+                } catch (e: Exception) {
+                    message = "Error: ${e.message}"
+                    resetScanState()
+                }
             }
         }
     }
@@ -247,7 +280,11 @@ fun ScannerScreen(
             onDismissRequest = { cancelDialog() },
             title = { Text("New Item") },
             text = {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     Text(
                         "Barcode: ${pendingBarcode ?: ""}",
                         style = MaterialTheme.typography.bodySmall
@@ -281,16 +318,6 @@ fun ScannerScreen(
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
-                               value = pillsPerBottleInput,
-                               onValueChange = { pillsPerBottleInput = it },
-                               label = { Text("Pills per bottle") },
-                               singleLine = true,
-                               keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                               keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                                ),
-                                modifier = Modifier.weight(1f)
-                           )
-                           OutlinedTextField(
                                 value = dosageInput,
                                 onValueChange = { dosageInput = it },
                                 label = { Text("Pills per dose") },
@@ -311,6 +338,61 @@ fun ScannerScreen(
                                 modifier = Modifier.weight(1f)
                             )
                         }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = pillsPerBottleInput,
+                            onValueChange = { pillsPerBottleInput = it },
+                            label = { Text("Pills per bottle") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    if (mode == ScanMode.GROCERY) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = quantityInput,
+                            onValueChange = { quantityInput = it },
+                            label = { Text("Quantity (units/packages)") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = portionsInput,
+                                onValueChange = { portionsInput = it },
+                                label = { Text("Portions") },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = portionsThresholdInput,
+                                onValueChange = { portionsThresholdInput = it },
+                                label = { Text("Refill at") },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Text(
+                            "Portions count down automatically each day (e.g. eggs: qty 1 carton, " +
+                                "3 portions left). Quantity is how many units/packages you have on hand.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
                 }
             },
