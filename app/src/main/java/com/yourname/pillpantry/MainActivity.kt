@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Kitchen
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -126,15 +129,34 @@ private fun PillPantryApp(
                                 launchSingleTop = true
                                 restoreState = true
                             }
+                                   colors = NavigationBarItemDefaults.colors(
+    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    selectedTextColor = MaterialTheme.colorScheme.primary,
+    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    indicatorColor = Color.Transparent
+                                    )     
                         },
                         icon = {
                             val icon = when (tab) {
-                                Tab.Scanner -> Icons.Default.CameraAlt
-                                Tab.Pantry -> Icons.Default.Kitchen
-                                Tab.ShoppingList -> Icons.Default.ShoppingCart
-                            }
-                            Icon(icon, contentDescription = tab.label)
-                        },
+                                Tab.Scanner ->
+                                     if (selected) Icons.Filled.CameraAlt
+            else Icons.Outlined.CameraAlt
+
+                                 Tab.Pantry ->
+                                     if (selected) Icons.Filled.Inventory2
+            else Icons.Outlined.Inventory2
+
+                                Tab.ShoppingList ->
+                                     if (selected) Icons.Filled.ShoppingCart
+            else Icons.Outlined.ShoppingCart
+                                  }
+
+                                  Icon(
+                                      imageVector = icon,
+                                      contentDescription = tab.label
+                                   )
+                        }
                         label = { Text(tab.label) }
                     )
                 }
