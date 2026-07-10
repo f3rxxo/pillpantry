@@ -1,5 +1,7 @@
 package com.yourname.pillpantry.ui.pantry
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,6 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.*
@@ -17,13 +21,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.google.gson.GsonBuilder
+import com.yourname.pillpantry.data.BackupPayload
 import com.yourname.pillpantry.data.FirebaseRepository
 import com.yourname.pillpantry.data.Grocery
 import com.yourname.pillpantry.data.Vitamin
 import com.yourname.pillpantry.notifications.NotificationHelper
 import kotlinx.coroutines.launch
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 /** Background colors for list rows across the app — deliberately fixed
  *  (not theme-derived) so groceries/vitamins stay visually distinct in
@@ -63,10 +75,66 @@ fun PantryScreen(userId: String, repository: FirebaseRepository) {
     // Already-taken-today guard state
     var alreadyTakenNotice by remember { mutableStateOf<Vitamin?>(null) }
 
+    // Manual grocery entry (no barcode scan) state
+    var showManualAddDialog by remember { mutableStateOf(false) }
+    var manualName by remember { mutableStateOf("") }
+    var manualQuantity by remember { mutableStateOf("1") }
+    var manualPortions by remember { mutableStateOf("1") }
+    var manualThreshold by remember { mutableStateOf("0") }
+
+    fun resetManualAddFields() {
+        manualName = ""
+        manualQuantity = "1"
+        manualPortions = "1"
+        manualThreshold = "0"
+    }
+
+    // Import/export state
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+    val gson = remember { GsonBuilder().setPrettyPrinting().create() }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            try {
+                val payload = repository.exportBackup(userId)
+                val json = gson.toJson(payload)
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(json.toByteArray())
+                }
+                backupMessage = "Backup saved (${payload.groceries.size} groceries, ${payload.vitamins.size} vitamins)"
+            } catch (e: Exception) {
+                backupMessage = "Export failed: ${e.message}"
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            try {
+                val json = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BufferedReader(InputStreamReader(stream)).readText()
+                } ?: throw IllegalStateException("Couldn't read file")
+                val payload = gson.fromJson(json, BackupPayload::class.java)
+                val summary = repository.importBackup(userId, payload)
+                backupMessage = summary.message
+            } catch (e: Exception) {
+                backupMessage = "Import failed: ${e.message}"
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 48.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             TabChip("Groceries", tab == PantryTab.GROCERIES, Modifier.weight(1f)) {
                 tab = PantryTab.GROCERIES
@@ -74,6 +142,37 @@ fun PantryScreen(userId: String, repository: FirebaseRepository) {
             TabChip("Vitamins", tab == PantryTab.VITAMINS, Modifier.weight(1f)) {
                 tab = PantryTab.VITAMINS
             }
+            IconButton(onClick = {
+                exportLauncher.launch("pillpantry-backup-${System.currentTimeMillis()}.json")
+            }) {
+                Icon(
+                    Icons.Default.FileUpload,
+                    contentDescription = "Export data",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            IconButton(onClick = {
+                importLauncher.launch(arrayOf("application/json"))
+            }) {
+                Icon(
+                    Icons.Default.FileDownload,
+                    contentDescription = "Import data",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        backupMessage?.let { msg ->
+            LaunchedEffect(msg) {
+                kotlinx.coroutines.delay(4000)
+                backupMessage = null
+            }
+            Text(
+                msg,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
         }
 
         Spacer(Modifier.height(6.dp))
@@ -150,6 +249,23 @@ fun PantryScreen(userId: String, repository: FirebaseRepository) {
                         }
                     }
                 }
+            }
+        }
+    }
+
+        if (tab == PantryTab.GROCERIES) {
+            FloatingActionButton(
+                onClick = {
+                    resetManualAddFields()
+                    showManualAddDialog = true
+                },
+                containerColor = Color(0xFF00796B),
+                contentColor = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add grocery item manually")
             }
         }
     }
@@ -374,6 +490,77 @@ fun PantryScreen(userId: String, repository: FirebaseRepository) {
             }
         )
     }
+
+    // --- Manual grocery entry (no barcode) ---
+
+    if (showManualAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showManualAddDialog = false },
+            title = { Text("Add Grocery Item") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = manualName,
+                        onValueChange = { manualName = it },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = manualQuantity,
+                        onValueChange = { manualQuantity = it },
+                        label = { Text("Quantity (units/packages)") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = manualPortions,
+                            onValueChange = { manualPortions = it },
+                            label = { Text("Portions") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = manualThreshold,
+                            onValueChange = { manualThreshold = it },
+                            label = { Text("Refill at") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = manualName.trim()
+                    val quantity = manualQuantity.toLongOrNull()
+                    val portions = manualPortions.toLongOrNull()
+                    val threshold = manualThreshold.toLongOrNull()
+                    if (name.isNotEmpty() && quantity != null && quantity > 0 &&
+                        portions != null && portions >= 0 && threshold != null && threshold >= 0
+                    ) {
+                        // No barcode for a manually-added item — a synthetic
+                        // one keeps the schema consistent and avoids ever
+                        // colliding with a real scanned barcode.
+                        val syntheticBarcode = "manual-${java.util.UUID.randomUUID()}"
+                        scope.launch {
+                            repository.addGrocery(userId, name, syntheticBarcode, quantity, portions, threshold)
+                        }
+                        showManualAddDialog = false
+                    }
+                }) { Text("Add") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManualAddDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 /**
@@ -406,7 +593,10 @@ private fun SwipeActionRow(
                     SwipeToDismissBoxValue.Settled -> true
                 }
             },
-            positionalThreshold = { distance -> distance * 0.35f }
+            // Raised from a lower value after accidental swipes triggered
+            // delete/restock too easily — now needs a deliberate, mostly-full
+            // swipe before it commits.
+            positionalThreshold = { distance -> distance * 0.65f }
         )
     }
 
@@ -484,10 +674,17 @@ private fun GroceryRow(item: Grocery, onToggleShoppingList: () -> Unit, onEdit: 
             Column(modifier = Modifier.weight(1f)) {
                 Text(item.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Qty: ${item.quantity} · ${item.portions} portions left" +
-                        if (item.isLowOnPortions) " · refill soon" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (item.isLowOnPortions) Color(0xFFFFF3E0) else Color.White.copy(alpha = 0.85f)
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = Color.White.copy(alpha = 0.85f))) {
+                            append("Qty: ${item.quantity} · ${item.portions} portions left")
+                        }
+                        if (item.isLowOnPortions) {
+                            withStyle(SpanStyle(color = Color(0xFFFF1744), fontWeight = FontWeight.Bold)) {
+                                append(" · refill soon")
+                            }
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
             IconButton(onClick = onEdit) {
@@ -522,8 +719,16 @@ private fun VitaminRow(vitamin: Vitamin, onTakeDose: () -> Unit, onEdit: () -> U
             Column(modifier = Modifier.weight(1f)) {
                 Text(vitamin.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "${vitamin.currentPills} pills left" + if (vitamin.isLow) " · refill soon" else "",
-                    color = if (vitamin.isLow) Color(0xFF4A0E00) else Color.White.copy(alpha = 0.9f),
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = Color.White.copy(alpha = 0.9f))) {
+                            append("${vitamin.currentPills} pills left")
+                        }
+                        if (vitamin.isLow) {
+                            withStyle(SpanStyle(color = Color(0xFFFF1744), fontWeight = FontWeight.Bold)) {
+                                append(" · refill soon")
+                            }
+                        }
+                    },
                     style = MaterialTheme.typography.bodySmall
                 )
             }

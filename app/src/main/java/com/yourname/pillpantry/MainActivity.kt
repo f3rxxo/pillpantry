@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
                         // FirebaseRepository.applyMissedPortionDecrements for
                         // why this runs here instead of relying solely on a
                         // background job to fire at exactly 7am).
-                        repository.applyMissedPortionDecrements(uid)
+                        repository.applyMissedPortionDecrements(uid, context = this@MainActivity)
                         userId = uid
                     }
                 }
@@ -143,7 +143,7 @@ private fun PillPantryApp(
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Tab.Scanner.route,
+            startDestination = Tab.Pantry.route,
             modifier = Modifier.fillMaxSize().padding(innerPadding)
         ) {
             composable(Tab.Scanner.route) {

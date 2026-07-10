@@ -21,6 +21,8 @@ object ScanFeedback {
 
         if (!vibrator.hasVibrator()) return
 
-        vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+        // 200ms at a strong explicit amplitude — the previous 50ms/DEFAULT_AMPLITUDE
+        // buzz was too subtle to reliably notice while scanning.
+        vibrator.vibrate(VibrationEffect.createOneShot(200, 220))
     }
 }

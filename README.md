@@ -23,9 +23,12 @@ no device-code login flow involved at all.
   icon to change its settings after creation — refill threshold and
   portions-per-unit for groceries, dose size and refill threshold for
   vitamins. Swipe any row **right to restock** manually (no scanning
-  needed) or **left to delete** it (with a confirmation dialog). Tapping
-  "Take Dose" a second time on the same day prompts a confirmation instead
-  of silently double-logging.
+  needed) or **left to delete** it (with a confirmation dialog) — the swipe
+  needs a deliberate, mostly-full drag to trigger, to avoid accidental
+  swipes. Tapping "Take Dose" a second time on the same day prompts a
+  confirmation instead of silently double-logging. A floating **+** button
+  on the Groceries tab adds an item manually, no barcode needed. Two icons
+  next to the tabs export/import your full data as a JSON backup file.
 - `ui/shoppinglist/ShoppingListScreen.kt` — groceries you've flagged from
   the Pantry tab; check one off to clear it from the list
 - `data/FirebaseRepository.kt` — all Firestore reads/writes
@@ -134,10 +137,23 @@ users/{userId}
   both themes so the two lists stay visually distinct; surrounding chrome
   (tab chips, empty states, dialog helper text) adapts via
   `MaterialTheme.colorScheme`.
-- **Scan feedback**: a short (50ms) vibration fires the instant a barcode
-  is detected (`util/ScanFeedback.kt`), before the Firestore lookup even
-  starts — useful since you're often not looking closely at the screen
-  while scanning.
+- **Scan feedback**: a 200ms vibration (explicit amplitude, not the
+  system default) fires the instant a barcode is detected
+  (`util/ScanFeedback.kt`), before the Firestore lookup even starts.
+- **App opens to the Pantry tab** by default, not Scanner, since checking
+  stock is the more common reason to open the app day-to-day.
+- **Background shopping-list notifications**: previously, a grocery item
+  crossing its refill threshold via the daily portion decay never sent a
+  notification at all — it only updated silently in Firestore. Now
+  `applyMissedPortionDecrements()` fires a local notification for any item
+  newly added to the shopping list, and this is called with a `Context`
+  both on app launch *and* from `PortionDecayWorker`'s background run, so
+  it also works when the app is fully closed (subject to the same
+  best-effort WorkManager timing caveats as the decay itself).
+- **Import/export**: two icons next to the Pantry tabs let you save your
+  full groceries + vitamins list to a JSON file (via Android's normal
+  "Save As" file picker) or restore from one. Import matches by barcode and
+  skips anything already tracked, so it's safe to re-run.
 
 
 

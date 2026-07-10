@@ -268,12 +268,24 @@ class FirebaseRepository(
      * crossed. Call this on app launch (and optionally from a best-effort
      * WorkManager job) so the count is always correct whenever the user
      * actually opens the app, even after several days away.
+     *
+     * If [context] is provided, also fires a local notification for any
+     * item newly pushed onto the shopping list by this decrement — this is
+     * what makes shopping-list notifications work even when the app is
+     * fully closed, since [context] is passed by
+     * [com.yourname.pillpantry.work.PortionDecayWorker] as well as by the
+     * app-launch catch-up call.
      */
-    suspend fun applyMissedPortionDecrements(userId: String, now: Instant = Instant.now()) {
+    suspend fun applyMissedPortionDecrements(
+        userId: String,
+        context: android.content.Context? = null,
+        now: Instant = Instant.now()
+    ) {
         val snapshot = groceriesRef(userId).get().await()
         val groceries = snapshot.toObjects(Grocery::class.java)
         val batch = db.batch()
         var hasUpdates = false
+        val newlyFlagged = mutableListOf<Pair<String, Long>>() // name to portions left
 
         for (item in groceries) {
             val last = item.lastPortionUpdate ?: continue
@@ -283,19 +295,116 @@ class FirebaseRepository(
             if (elapsedDays <= 0) continue
 
             val newPortions = (item.portions - elapsedDays).coerceAtLeast(0)
+            val nowOnShoppingList = item.onShoppingList || newPortions <= item.portionsThreshold
             val docRef = groceriesRef(userId).document(item.id)
             batch.update(
                 docRef,
                 mapOf(
                     "portions" to newPortions,
                     "lastPortionUpdate" to FieldValue.serverTimestamp(),
-                    "onShoppingList" to (item.onShoppingList || newPortions <= item.portionsThreshold)
+                    "onShoppingList" to nowOnShoppingList
                 )
             )
             hasUpdates = true
+
+            if (nowOnShoppingList && !item.onShoppingList) {
+                newlyFlagged.add(item.name to newPortions)
+            }
         }
 
         if (hasUpdates) batch.commit().await()
+
+        if (context != null) {
+            for ((name, portionsLeft) in newlyFlagged) {
+                com.yourname.pillpantry.notifications.NotificationHelper.sendShoppingListAlert(context, name, portionsLeft)
+            }
+        }
+    }
+
+    /** Reads everything for a one-shot JSON export — see [ImportSummary]/[BackupPayload]. */
+    suspend fun exportBackup(userId: String): BackupPayload {
+        val groceriesSnap = groceriesRef(userId).get().await()
+        val vitaminsSnap = vitaminsRef(userId).get().await()
+
+        val groceries = groceriesSnap.toObjects(Grocery::class.java).map {
+            GroceryBackup(
+                name = it.name,
+                barcode = it.barcode,
+                quantity = it.quantity,
+                portions = it.portions,
+                portionsPerUnit = it.portionsPerUnit,
+                portionsThreshold = it.portionsThreshold,
+                onShoppingList = it.onShoppingList
+            )
+        }
+        val vitamins = vitaminsSnap.toObjects(Vitamin::class.java).map {
+            VitaminBackup(
+                name = it.name,
+                barcode = it.barcode,
+                currentPills = it.currentPills,
+                dailyDosage = it.dailyDosage,
+                refillThreshold = it.refillThreshold,
+                onShoppingList = it.onShoppingList
+            )
+        }
+
+        return BackupPayload(
+            exportedAt = Instant.now().toString(),
+            groceries = groceries,
+            vitamins = vitamins
+        )
+    }
+
+    /**
+     * Restores from a JSON export. Matches by barcode to avoid duplicates —
+     * an item already tracked (same barcode) is skipped rather than
+     * overwritten, so importing is safe to run repeatedly (e.g. re-importing
+     * an old backup won't stomp on changes made since).
+     */
+    suspend fun importBackup(userId: String, payload: BackupPayload): ImportSummary {
+        var groceriesAdded = 0
+        var groceriesSkipped = 0
+        var vitaminsAdded = 0
+        var vitaminsSkipped = 0
+
+        for (g in payload.groceries) {
+            if (findGroceryByBarcode(userId, g.barcode) != null) {
+                groceriesSkipped++
+                continue
+            }
+            val doc = mapOf(
+                "name" to g.name,
+                "barcode" to g.barcode,
+                "quantity" to g.quantity,
+                "portions" to g.portions,
+                "portionsPerUnit" to g.portionsPerUnit,
+                "portionsThreshold" to g.portionsThreshold,
+                "lastPortionUpdate" to FieldValue.serverTimestamp(),
+                "onShoppingList" to g.onShoppingList
+            )
+            groceriesRef(userId).add(doc).await()
+            groceriesAdded++
+        }
+
+        for (v in payload.vitamins) {
+            if (findVitaminByBarcode(userId, v.barcode) != null) {
+                vitaminsSkipped++
+                continue
+            }
+            val doc = mapOf(
+                "name" to v.name,
+                "barcode" to v.barcode,
+                "currentPills" to v.currentPills,
+                "dailyDosage" to v.dailyDosage,
+                "refillThreshold" to v.refillThreshold,
+                "lastTaken" to null,
+                "onShoppingList" to v.onShoppingList
+            )
+            vitaminsRef(userId).add(doc).await()
+            vitaminsAdded++
+        }
+
+        return ImportSummary(groceriesAdded, groceriesSkipped, vitaminsAdded, vitaminsSkipped)
     }
 
     /** Number of 7am Central-time boundaries crossed between [from] and [to]. */

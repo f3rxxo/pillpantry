@@ -31,7 +31,7 @@ class PortionDecayWorker(
     override suspend fun doWork(): Result {
         val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.success()
         return try {
-            FirebaseRepository().applyMissedPortionDecrements(userId)
+            FirebaseRepository().applyMissedPortionDecrements(userId, context = applicationContext)
             Result.success()
         } catch (e: Exception) {
             Result.retry()
