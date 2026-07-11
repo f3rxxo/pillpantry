@@ -593,10 +593,10 @@ private fun SwipeActionRow(
                     SwipeToDismissBoxValue.Settled -> true
                 }
             },
-            // Raised from a lower value after accidental swipes triggered
-            // delete/restock too easily — now needs a deliberate, mostly-full
-            // swipe before it commits.
-            positionalThreshold = { distance -> distance * 0.65f }
+            // Raised again after reports of vertical scrolling through the
+            // list still triggering accidental swipes — now needs a
+            // deliberate, nearly-full-width drag to commit.
+            positionalThreshold = { distance -> distance * 0.85f }
         )
     }
 

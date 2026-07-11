@@ -47,6 +47,9 @@ class FirebaseRepository(
     private fun vitaminsRef(userId: String) =
         db.collection("users").document(userId).collection("vitamins")
 
+    private fun customShoppingItemsRef(userId: String) =
+        db.collection("users").document(userId).collection("customShoppingItems")
+
     fun observeGroceries(userId: String): Flow<List<Grocery>> = callbackFlow {
         val registration = groceriesRef(userId)
             .orderBy("name", Query.Direction.ASCENDING)
@@ -98,12 +101,24 @@ class FirebaseRepository(
         vitaminsRef(userId).document(itemId).update("onShoppingList", onList).await()
     }
 
-    /** Groceries AND vitamins currently flagged onShoppingList = true, merged into one flow. */
+    /** Adds a free-text shopping list entry not tied to any tracked grocery/vitamin. */
+    suspend fun addCustomShoppingItem(userId: String, name: String) {
+        val doc = mapOf("name" to name, "createdAt" to FieldValue.serverTimestamp())
+        customShoppingItemsRef(userId).add(doc).await()
+    }
+
+    /** Removes a custom shopping item outright — there's no underlying tracked item to keep. */
+    suspend fun deleteCustomShoppingItem(userId: String, itemId: String) {
+        customShoppingItemsRef(userId).document(itemId).delete().await()
+    }
+
+    /** Groceries, vitamins, AND custom items currently on the shopping list, merged into one flow. */
     fun observeShoppingList(userId: String): Flow<ShoppingListSnapshot> = callbackFlow {
         var latestGroceries = emptyList<Grocery>()
         var latestVitamins = emptyList<Vitamin>()
+        var latestCustomItems = emptyList<CustomShoppingItem>()
 
-        fun emit() = trySend(ShoppingListSnapshot(latestGroceries, latestVitamins))
+        fun emit() = trySend(ShoppingListSnapshot(latestGroceries, latestVitamins, latestCustomItems))
 
         val groceryReg = groceriesRef(userId)
             .whereEqualTo("onShoppingList", true)
@@ -127,9 +142,21 @@ class FirebaseRepository(
                 emit()
             }
 
+        val customReg = customShoppingItemsRef(userId)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                latestCustomItems = snapshot?.toObjects(CustomShoppingItem::class.java) ?: emptyList()
+                emit()
+            }
+
         awaitClose {
             groceryReg.remove()
             vitaminReg.remove()
+            customReg.remove()
         }
     }
 
@@ -424,7 +451,8 @@ class FirebaseRepository(
 
 data class ShoppingListSnapshot(
     val groceries: List<Grocery> = emptyList(),
-    val vitamins: List<Vitamin> = emptyList()
+    val vitamins: List<Vitamin> = emptyList(),
+    val customItems: List<CustomShoppingItem> = emptyList()
 ) {
-    val isEmpty: Boolean get() = groceries.isEmpty() && vitamins.isEmpty()
+    val isEmpty: Boolean get() = groceries.isEmpty() && vitamins.isEmpty() && customItems.isEmpty()
 }

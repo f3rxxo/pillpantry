@@ -29,8 +29,11 @@ no device-code login flow involved at all.
   confirmation instead of silently double-logging. A floating **+** button
   on the Groceries tab adds an item manually, no barcode needed. Two icons
   next to the tabs export/import your full data as a JSON backup file.
-- `ui/shoppinglist/ShoppingListScreen.kt` — groceries you've flagged from
-  the Pantry tab; check one off to clear it from the list
+- `ui/shoppinglist/ShoppingListScreen.kt` — groceries you've flagged (blue)
+  and vitamins that dropped low (orange) show up automatically; a text
+  field at the top lets you add one-off custom items (gray-blue rows) that
+  aren't tracked in Pantry at all — checking one off deletes it outright
+  rather than clearing a flag, since there's no underlying tracked item.
 - `data/FirebaseRepository.kt` — all Firestore reads/writes
 - `data/OpenFoodFactsApi.kt` — Retrofit client for barcode → product name
 - `notifications/NotificationHelper.kt` — local refill notifications

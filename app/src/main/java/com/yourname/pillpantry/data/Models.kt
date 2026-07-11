@@ -41,3 +41,16 @@ data class Vitamin(
             return lastDate == LocalDate.now()
         }
 }
+
+/**
+ * A one-off shopping list entry that isn't tracked in the groceries or
+ * vitamins collections at all — e.g. "paper towels" that you don't want
+ * PillPantry monitoring stock levels for, just something to remember to
+ * buy. Checking one off deletes it outright, since there's no underlying
+ * tracked item for it to "return" to.
+ */
+data class CustomShoppingItem(
+    @DocumentId val id: String = "",
+    val name: String = "",
+    @ServerTimestamp val createdAt: Date? = null
+)
