@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.Arrangement
@@ -129,35 +130,37 @@ private fun PillPantryApp(
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                                   colors = NavigationBarItemDefaults.colors(
-    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-    selectedTextColor = MaterialTheme.colorScheme.primary,
-    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    indicatorColor = Color.Transparent
-                                    )     
                         },
                         icon = {
                             val icon = when (tab) {
                                 Tab.Scanner ->
-                                     if (selected) Icons.Filled.CameraAlt
-            else Icons.Outlined.CameraAlt
+                                    if (selected) Icons.Filled.CameraAlt
+                                    else Icons.Outlined.CameraAlt
 
-                                 Tab.Pantry ->
-                                     if (selected) Icons.Filled.Inventory2
-            else Icons.Outlined.Inventory2
+                                Tab.Pantry ->
+                                    if (selected) Icons.Filled.Inventory2
+                                    else Icons.Outlined.Inventory2
 
                                 Tab.ShoppingList ->
-                                     if (selected) Icons.Filled.ShoppingCart
-            else Icons.Outlined.ShoppingCart
-                                  }
+                                    if (selected) Icons.Filled.ShoppingCart
+                                    else Icons.Outlined.ShoppingCart
+                            }
 
-                                  Icon(
-                                      imageVector = icon,
-                                      contentDescription = tab.label
-                                   )
-                        }
-                        label = { Text(tab.label) }
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = tab.label
+                            )
+                        },
+                        label = {
+                            Text(tab.label)
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            indicatorColor = Color.Transparent // Use primaryContainer for the pill style
+                        )
                     )
                 }
             }
