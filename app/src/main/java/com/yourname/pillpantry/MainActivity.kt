@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         NotificationHelper.createChannel(this)
         com.yourname.pillpantry.work.PortionDecayWorker.schedule(this)
+        com.yourname.pillpantry.work.PillReminderWorker.schedule(this)
 
         setContent {
             PillPantryTheme {

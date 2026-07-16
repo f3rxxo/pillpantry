@@ -279,6 +279,12 @@ class FirebaseRepository(
             .await()
     }
 
+    /** One-time fetch of vitamins that haven't been logged today — used by the evening reminder. */
+    suspend fun getVitaminsNotTakenToday(userId: String): List<Vitamin> {
+        val snapshot = vitaminsRef(userId).get().await()
+        return snapshot.toObjects(Vitamin::class.java).filter { !it.takenToday }
+    }
+
     /** Edit a grocery item's portions-per-unit and refill threshold after creation. */
     suspend fun updateGrocerySettings(userId: String, itemId: String, portionsPerUnit: Long, portionsThreshold: Long) {
         groceriesRef(userId).document(itemId)

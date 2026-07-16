@@ -153,6 +153,15 @@ users/{userId}
   both on app launch *and* from `PortionDecayWorker`'s background run, so
   it also works when the app is fully closed (subject to the same
   best-effort WorkManager timing caveats as the decay itself).
+- **Evening pill reminder**: `work/PillReminderWorker.kt` runs once daily,
+  targeting ~9:00pm America/Chicago, and checks which vitamins haven't been
+  logged yet today (reusing the same `takenToday` check as the "already
+  taken" guard). If everything's already been taken, it stays silent — no
+  nightly nag for no reason. Same best-effort timing caveat as the portion
+  decay job applies (no exact-time guarantee), but unlike portion decay
+  there's no meaningful "catch-up" for a missed reminder, so this one
+  requires network connectivity to run rather than risking a stale offline
+  read.
 - **Import/export**: two icons next to the Pantry tabs let you save your
   full groceries + vitamins list to a JSON file (via Android's normal
   "Save As" file picker) or restore from one. Import matches by barcode and
